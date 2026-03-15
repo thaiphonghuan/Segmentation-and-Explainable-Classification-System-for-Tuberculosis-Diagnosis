@@ -1,6 +1,5 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8080';
 const AI_BASE_URL = import.meta.env.VITE_AI_API_BASE_URL || 'http://localhost:8000';
-const AI_CAPTION_BASE_URL = import.meta.env.VITE_AI_CAPTION_BASE_URL || 'http://localhost:8001';
 
 async function request(path, { method = 'GET', body, token, headers = {}, credentials = 'include' } = {}) {
   const options = {
@@ -55,7 +54,7 @@ async function requestForm(path, formData, { baseUrl = API_BASE_URL } = {}) {
   }
 
   return data;
-    }
+}
 
 export const authApi = {
   login({ cccd, password }) {
@@ -101,12 +100,5 @@ export const aiApi = {
     formData.append('file', file);
 
     return requestForm('/predict', formData, { baseUrl: AI_BASE_URL });
-  },
-
-  async captionImage(file) {
-    const formData = new FormData();
-    formData.append('file', file);
-
-    return requestForm('/caption', formData, { baseUrl: AI_CAPTION_BASE_URL });
-}
+  }
 };

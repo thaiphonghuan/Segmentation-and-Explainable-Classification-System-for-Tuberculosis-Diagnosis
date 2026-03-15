@@ -50,10 +50,18 @@ export default function SegmentationPage() {
     <section className="page page-segmentation">
       <div className="segment-card">
         <div className="segment-header">
-          <h2>Phân đoạn ảnh y tế</h2>
-          <p className="segment-subtitle">
-            Tải lên ảnh y tế (X-ray/CT) để hệ thống AI thực hiện segmentation và trả về mặt nạ cùng ảnh overlay.
-          </p>
+          <div>
+            <p className="page-tag">Segmentation</p>
+            <h2>Phân đoạn ảnh y tế</h2>
+            <p className="segment-subtitle">
+              Tải lên ảnh y tế (X-ray/CT) để hệ thống AI thực hiện segmentation và trả về mặt nạ cùng ảnh overlay.
+            </p>
+          </div>
+          <div className="segment-actions">
+            <span className="hint-chip">Mask</span>
+            <span className="hint-chip">Overlay</span>
+            <span className="hint-chip">Báo cáo nhanh</span>
+          </div>
         </div>
 
         <form onSubmit={handleSubmit} className="segment-form">
@@ -67,16 +75,25 @@ export default function SegmentationPage() {
 
           {previewUrl && (
             <div className="preview-grid">
-              <div>
-                <h4>Ảnh gốc</h4>
+              <div className="image-card">
+                <div className="image-card-header">
+                  <h4>Ảnh gốc</h4>
+                  <span className="status-chip">Original</span>
+                </div>
                 <img src={previewUrl} alt="Ảnh gốc" />
               </div>
-              <div>
-                <h4>Overlay</h4>
+              <div className="image-card">
+                <div className="image-card-header">
+                  <h4>Overlay</h4>
+                  <span className="status-chip">Heatmap</span>
+                </div>
                 {resultOverlay ? <img src={resultOverlay} alt="Overlay" /> : <div className="empty-box">Chưa có kết quả</div>}
               </div>
-              <div>
-                <h4>Mask</h4>
+              <div className="image-card">
+                <div className="image-card-header">
+                  <h4>Mask</h4>
+                  <span className="status-chip">Binary</span>
+                </div>
                 {resultMask ? <img src={resultMask} alt="Mask" /> : <div className="empty-box">Chưa có kết quả</div>}
               </div>
             </div>
@@ -84,7 +101,10 @@ export default function SegmentationPage() {
 
           {stats && (
             <div className="segment-stats">
-              <h4>Thông tin phân đoạn</h4>
+              <div className="section-title">
+                <h4>Thông tin phân đoạn</h4>
+                <span>Segmentation summary</span>
+              </div>
               <div className="stats-grid">
                 <div>
                   <span>Latency</span>
@@ -106,9 +126,14 @@ export default function SegmentationPage() {
 
           {error && <p className="form-error">{error}</p>}
 
-          <button type="submit" className="btn btn-primary" disabled={isLoading}>
-            {isLoading ? 'Đang xử lý...' : 'Phân đoạn ảnh'}
-          </button>
+          <div className="form-actions">
+            <button type="submit" className="btn btn-primary" disabled={isLoading}>
+              {isLoading ? 'Đang xử lý...' : 'Phân đoạn ảnh'}
+            </button>
+            <a className="btn btn-outline" href="/classification">
+              Sang Classification + XAI
+            </a>
+          </div>
         </form>
       </div>
     </section>

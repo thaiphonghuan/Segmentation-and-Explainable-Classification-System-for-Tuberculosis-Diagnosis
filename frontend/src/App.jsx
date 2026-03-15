@@ -5,7 +5,7 @@ import HomePage from './pages/HomePage';
 import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import SegmentationPage from './pages/SegmentationPage';
-import CaptioningPage from './pages/CaptioningPage';
+import ClassificationPage from './pages/ClassificationPage';
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated } = useAuth();
@@ -38,10 +38,10 @@ export default function App() {
             }
           />
           <Route
-            path="/captioning"
+            path="/classification"
             element={
               <ProtectedRoute>
-                <CaptioningPage />
+                <ClassificationPage />
               </ProtectedRoute>
             }
           />
@@ -52,4 +52,3 @@ export default function App() {
     </div>
   );
 }
-

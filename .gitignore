@@ -30,7 +30,3 @@ Thumbs.db
 .vscode/
 .idea/
 
-# Models / artifacts
-*.pt
-*.onnx
-backend_ai/segmentation/saved_models/

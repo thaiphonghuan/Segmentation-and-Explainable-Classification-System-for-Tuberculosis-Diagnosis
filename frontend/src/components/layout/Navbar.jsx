@@ -16,7 +16,7 @@ export default function Navbar() {
   return (
     <header className="navbar">
       <div className="navbar-left">
-        <span className="navbar-logo">Hệ thống đặt lịch khám</span>
+        <span className="navbar-logo">AI Hỗ trợ chẩn đoán ảnh y tế</span>
       </div>
       <nav className="navbar-right">
         {isAuthenticated ? (
@@ -24,8 +24,8 @@ export default function Navbar() {
             <Link className={isActive('/segmentation')} to="/segmentation">
               Segmentation
             </Link>
-            <Link className={isActive('/captioning')} to="/captioning">
-              Captioning
+            <Link className={isActive('/classification')} to="/classification">
+              Classification + XAI
             </Link>
             <span className="navbar-user">Xin chào, {user?.fullName}</span>
             <button className="btn btn-outline" onClick={handleLogout}>

@@ -2,7 +2,7 @@
 
 Dự án gồm 3 phần chính:
 
-- **backend_ai**: API AI cho captioning và segmentation.
+- **backend_ai**: API AI cho captioning, segmentation và TB classification.
 - **backend_se**: Backend Node.js cho xác thực và API người dùng.
 - **frontend**: Frontend React (Vite).
 
@@ -45,19 +45,11 @@ npm start
 
 ### 2) Backend AI (Python)
 
-**Captioning**:
+**Segmentation + TB Classification**:
 
 ```bash
-cd backend_ai/captioning
-pip install fastapi uvicorn transformers torch pillow
-uvicorn api:app --host 0.0.0.0 --port 8001 --reload
-```
-
-**Segmentation**:
-
-```bash
-cd backend_ai/segmentation
-pip install fastapi uvicorn onnxruntime pillow opencv-python numpy
+cd backend_ai
+pip install fastapi uvicorn onnxruntime pillow opencv-python numpy torch torchvision timm
 uvicorn api:app --host 0.0.0.0 --port 8000 --reload
 ```
 
@@ -72,12 +64,12 @@ npm run dev
 ## Biến môi trường
 
 - `backend_se`: tạo file `.env` theo cấu hình DB/JWT/email.
-- `backend_ai`: có thể thiết lập `MODEL_ID` (captioning) hoặc `MODEL_PATH` (segmentation) nếu cần.
+- `backend_ai`: có thể thiết lập `MODEL_ID` (captioning), `MODEL_PATH` (segmentation) hoặc `TB_MODEL_PATH` (TB classification) nếu cần.
 
 ## API endpoints
 
 - **Captioning**: `POST /caption`, `GET /health`
-- **Segmentation**: `POST /predict`, `POST /predict/image`, `GET /health`
+- **Segmentation + TB Classification**: `POST /predict` (trả về segmentation + classification), `POST /predict/image`, `GET /health`
 
 ## Ghi chú
 
