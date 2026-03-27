@@ -5,26 +5,22 @@ const IMAGE_TILES = [
   {
     key: 'original',
     title: '1. Original X-ray',
-    description:
-      'Ảnh X-ray ngực gốc, thấy rõ cấu trúc xương sườn và vùng phổi. Đây là dữ liệu đầu vào ban đầu.'
+    description: 'Ảnh X-ray ngực gốc'
   },
   {
     key: 'mask',
-    title: '2. Corrected Mask (Lungs = White)',
-    description:
-      'Mask phổi đã được tách khỏi nền. Hai vùng phổi hiển thị màu trắng, nền đen — cho thấy phân đoạn phổi hoạt động tốt.'
+    title: '2. Corrected Mask',
+    description: 'Mask phổi đã được tách khỏi nền'
   },
   {
     key: 'lungs',
-    title: '3. Input to AI (Only Lungs)',
-    description:
-      'Ảnh đã được áp mask và cắt vùng phổi, chỉ giữ lại phần phổi, loại bỏ vùng xương ngoài. Đây là dữ liệu phù hợp để đưa vào mô hình phân loại.'
+    title: '3. CLAHE',
+    description: 'Ảnh đã được áp dụng CLAHE để làm tăng độ tương phản'
   },
   {
     key: 'gradcam',
     title: '4. Grad-CAM Result',
-    description:
-      'Kết quả Grad-CAM chỉ hiển thị trên vùng phổi đã được crop. Vùng màu nóng (đỏ/vàng) là nơi mô hình tập trung để dự đoán.'
+    description: 'Kết quả Grad-CAM. Vùng màu nóng (đỏ/vàng) là nơi mô hình tập trung để dự đoán.'
   }
 ];
 
@@ -33,7 +29,6 @@ function toDataUrl(base64) {
   return `data:image/png;base64,${base64}`;
 }
 
-
 export default function ClassificationPage() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState('');
@@ -41,6 +36,10 @@ export default function ClassificationPage() {
   const [overlayUrl, setOverlayUrl] = useState('');
   const [lungOnlyUrl, setLungOnlyUrl] = useState('');
   const [maskedGradcamUrl, setMaskedGradcamUrl] = useState('');
+  
+  // State lưu kết quả chẩn đoán
+  const [prediction, setPrediction] = useState(null);
+  
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
@@ -56,6 +55,7 @@ export default function ClassificationPage() {
     setOverlayUrl('');
     setLungOnlyUrl('');
     setMaskedGradcamUrl('');
+    setPrediction(null);
     setError('');
   };
 
@@ -71,14 +71,29 @@ export default function ClassificationPage() {
 
     try {
       const result = await aiApi.segmentImage(selectedFile);
+      
+      // Console log để kiểm tra (F12)
+      console.log("Dữ liệu từ API:", result.classification);
+
       const nextMaskUrl = toDataUrl(result.mask_b64);
       const nextOverlayUrl = toDataUrl(result.overlay_b64);
       const nextLungOnlyUrl = toDataUrl(result.classification?.lung_only_b64);
       const nextGradcamUrl = toDataUrl(result.classification?.gradcam_b64);
+      
       setMaskUrl(nextMaskUrl);
       setOverlayUrl(nextOverlayUrl);
       setLungOnlyUrl(nextLungOnlyUrl);
       setMaskedGradcamUrl(nextGradcamUrl);
+
+      if (result.classification) {
+        // KHỚP CHÍNH XÁC VỚI FILE API.PY CỦA BẠN:
+        // predicted_class trả về "TB" hoặc "Normal"
+        // confidence trả về giá trị xác suất (ví dụ: 0.685)
+        setPrediction({
+          label: result.classification.predicted_class || "",
+          probability: result.classification.confidence ?? 0
+        });
+      }
     } catch (err) {
       setError(err.message || 'Không thể phân loại ảnh.');
     } finally {
@@ -92,6 +107,14 @@ export default function ClassificationPage() {
     lungs: lungOnlyUrl,
     gradcam: maskedGradcamUrl || overlayUrl
   };
+
+  // KIỂM TRA BỆNH LAO:
+  // Vì Backend trả về "TB" nên ta kiểm tra chuỗi có chứa "TB" hoặc "tuber" không
+  const isTuberculosis = useMemo(() => {
+    if (!prediction?.label) return false;
+    const label = prediction.label.toLowerCase();
+    return label.includes('tb') || label.includes('tuber');
+  }, [prediction]);
 
   return (
     <section className="page page-classification">
@@ -120,6 +143,30 @@ export default function ClassificationPage() {
               <p>Hỗ trợ PNG/JPG, tối đa 5MB.</p>
             </div>
           </label>
+
+          {/* DÒNG HIỂN THỊ KẾT QUẢ ĐÃ ĐƯỢC FIX KHỚP VỚI BACKEND */}
+          {prediction && (
+            <div style={{
+              margin: '25px 0',
+              padding: '15px',
+              borderRadius: '8px',
+              textAlign: 'center',
+              backgroundColor: isTuberculosis ? '#fff1f0' : '#f6ffed',
+              border: `1px solid ${isTuberculosis ? '#ffa39e' : '#b7eb8f'}`
+            }}>
+              <h3 style={{
+                margin: 0,
+                color: isTuberculosis ? '#cf1322' : '#389e0d',
+                fontSize: '1.4rem',
+                fontWeight: 'bold'
+              }}>
+                KẾT QUẢ: {isTuberculosis ? 'CÓ DẤU HIỆU BỆNH LAO' : 'PHỔI BÌNH THƯỜNG'}
+              </h3>
+              <p style={{ margin: '5px 0 0', color: '#555' }}>
+                Độ tin cậy: <strong>{(prediction.probability * 100).toFixed(2)}%</strong>
+              </p>
+            </div>
+          )}
 
           {previewUrl && (
             <div className="xai-image-grid">

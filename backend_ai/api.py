@@ -46,7 +46,7 @@ from pytorch_grad_cam.utils.image import show_cam_on_image
 # Config
 # ─────────────────────────────────────────────
 MODEL_PATH = os.getenv("MODEL_PATH", "model.onnx")
-TB_MODEL_PATH = os.getenv("TB_MODEL_PATH", "tb_densenet121_masked_no_aug.pth")
+TB_MODEL_PATH = os.getenv("TB_MODEL_PATH", "tb_densenet_ultimate.pth")
 INPUT_H    = int(os.getenv("INPUT_H", 256))
 INPUT_W    = int(os.getenv("INPUT_W", 256))
 MEAN       = np.array([0.485, 0.456, 0.406], dtype=np.float32)
@@ -121,22 +121,38 @@ def get_tb_model() -> Optional[torch.nn.Module]:
 # Pre / Post processing helpers
 # ─────────────────────────────────────────────
 def preprocess(pil_image: Image.Image) -> Tuple[np.ndarray, Tuple[int, int]]:
-    """Resize → normalise → NCHW float32.  Returns (tensor, original_size)."""
+    """Chuẩn bị dữ liệu cho mô hình Segmentation"""
     orig_size = pil_image.size  # (W, H)
     img = pil_image.convert("RGB").resize((INPUT_W, INPUT_H), Image.BILINEAR)
-    arr = np.array(img, dtype=np.float32) / 255.0         # (H, W, 3)
-    arr = (arr - MEAN) / STD                               # normalise
-    arr = arr.transpose(2, 0, 1)[np.newaxis]               # (1, 3, H, W)
+    arr = np.array(img, dtype=np.float32) / 255.0         # Chuyển về [0, 1]
+    # PHẢI CÓ DÒNG NÀY: Chuẩn hóa theo ImageNet để AI nhìn rõ cấu trúc
+    arr = (arr - MEAN) / STD                               
+    arr = arr.transpose(2, 0, 1)[np.newaxis]               # Chuyển về NCHW
     return arr.astype(np.float32), orig_size
 
 
 def postprocess(logits: np.ndarray) -> np.ndarray:
-    """logits (1, n_cls, H, W) → binary mask (H, W) uint8  0/255.
-    Note: Mask from segmentation model: 0=lung, 1=background (will be inverted for classification).
-    """
-    pred = np.argmax(logits[0], axis=0).astype(np.uint8)   # (H, W)  0 or 1
+    """Chuyển kết quả AI thành ảnh Mask trắng đen"""
+    # Nếu mô hình trả về nhiều hơn 1 kênh (Multi-class)
+    if logits.shape[1] > 1:
+        pred = np.argmax(logits[0], axis=0).astype(np.uint8)
+    else:
+        # Nếu là mô hình Binary (1 kênh), dùng ngưỡng 0.5
+        # Lưu ý: Nếu mô hình chưa có Sigmoid ở cuối, cần bọc thêm torch.sigmoid
+        mask = logits[0, 0]
+        pred = (mask > 0.5).astype(np.uint8)
     return (pred * 255).astype(np.uint8)
 
+def apply_clahe_to_pil(pil_img: Image.Image) -> Image.Image:
+    img_np = np.array(pil_img.convert("RGB"))
+    lab = cv2.cvtColor(img_np, cv2.COLOR_RGB2LAB)
+    l, a, b = cv2.split(lab)
+    # Đảm bảo đúng thông số này
+    clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+    l = clahe.apply(l)
+    limg = cv2.merge((l, a, b))
+    final_img = cv2.cvtColor(limg, cv2.COLOR_LAB2RGB)
+    return Image.fromarray(final_img)
 
 def build_heatmap_overlay(
     original: Image.Image,
@@ -247,81 +263,75 @@ def _build_gradcam(tb_model: torch.nn.Module, input_tensor: torch.Tensor) -> Opt
 
 def run_tb_classification(pil_img: Image.Image, mask_255: np.ndarray) -> dict:
     """
-    Run TB classification on masked and cropped lung region.
-    Aligned with Colab pipeline: mask inversion, crop with expansion, resize to 224x224.
-    Also returns inputs for XAI (cropped lung image and grad-cam overlay).
+    Run TB classification on masked, cropped and CLAHE-enhanced lung region.
+    HOÀN TOÀN ĐỒNG BỘ VỚI PIPELINE ULTIMATE TRÊN KAGGLE.
     """
     tb_model = get_tb_model()
     if tb_model is None:
         return None
 
     try:
-        # Resize mask to original image size
+        # Resize mask về kích thước ảnh gốc để crop chính xác
         mask_resized = cv2.resize(mask_255, (pil_img.width, pil_img.height), interpolation=cv2.INTER_NEAREST)
 
-        # Apply mask and crop with 15% expansion (aligned with Colab)
-        cropped_img, _cropped_mask = apply_mask_and_crop(pil_img, mask_resized, expand=0.15)
+        # 1. Áp dụng Mask và Crop (15% expansion)
+        cropped_img, _ = apply_mask_and_crop(pil_img, mask_resized, expand=0.15)
 
-        # Transform pipeline (aligned with training: Resize(224,224), ToTensor, Normalize)
+        # 2. Áp dụng CLAHE (Bắt buộc để giống lúc train Ultimate)
+        enhanced_img = apply_clahe_to_pil(cropped_img)
+
+        # 3. Transform pipeline (Resize 224x224 và Chuẩn hóa ImageNet)
         transform = transforms.Compose([
             transforms.Resize((224, 224)),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
         ])
 
-        # Preprocess for classification
+        # Preprocess input cho mô hình
         t0 = time.perf_counter()
-        input_tensor = transform(cropped_img).unsqueeze(0).to(_device)
+        # AI sẽ nhìn thấy ảnh đã qua CLAHE
+        input_tensor = transform(enhanced_img).unsqueeze(0).to(_device)
 
         with torch.no_grad():
             output = tb_model(input_tensor)
 
-            # Handle different output formats
+            # Xử lý format đầu ra của timm
             if isinstance(output, (list, tuple)):
                 logits = output[0]
             else:
                 logits = output
 
-            # Binary classification with sigmoid (num_classes=1)
-            # Output shape: (batch, 1) -> apply sigmoid
-            if logits.dim() == 2 and logits.size(1) == 1:
-                # Binary classification: sigmoid output
-                prob = torch.sigmoid(logits).item()
-                tb_prob = float(prob)
-                normal_prob = 1.0 - tb_prob
-                predicted_class = "TB" if tb_prob > 0.5 else "Normal"
-            elif logits.dim() == 2 and logits.size(1) > 1:
-                # Multi-class: softmax
-                probs = torch.softmax(logits, dim=1)
-                probs_np = probs.cpu().numpy()[0]
-                normal_prob = float(probs_np[0])
-                tb_prob = float(probs_np[1]) if len(probs_np) > 1 else 0.0
-                predicted_class = "TB" if tb_prob > normal_prob else "Normal"
-            else:
-                # Single value output
-                prob = torch.sigmoid(logits).item() if logits.numel() == 1 else torch.sigmoid(logits[0]).item()
-                tb_prob = float(prob)
-                normal_prob = 1.0 - tb_prob
-                predicted_class = "TB" if tb_prob > 0.5 else "Normal"
+            # Tính xác suất bằng Sigmoid (Binary Classification)
+            prob = torch.sigmoid(logits).item()
+            tb_prob = float(prob)
+            normal_prob = 1.0 - tb_prob
+            predicted_class = "TB" if tb_prob > 0.5 else "Normal"
 
             latency = (time.perf_counter() - t0) * 1000  # ms
 
-        # Build Grad-CAM overlay on lung-only image (aligned with Colab)
+        # 4. CHUẨN BỊ ẢNH HIỂN THỊ CHO FRONTEND (XAI)
         gradcam_b64 = None
         lung_only_b64 = None
+        
         try:
-            cropped_resized = cropped_img.resize((224, 224))
-            img_np_float = np.array(cropped_resized).astype(np.float32) / 255.0
+            # Tạo ảnh 224x224 sạch để làm nền cho Grad-CAM
+            enhanced_resized = enhanced_img.resize((224, 224))
+            img_np_float = np.array(enhanced_resized).astype(np.float32) / 255.0
 
+            # Tạo heatmap Grad-CAM
             grayscale_cam = _build_gradcam(tb_model, input_tensor)
             if grayscale_cam is not None:
+                # Chồng heatmap lên ảnh đã CLAHE
                 cam_image = show_cam_on_image(img_np_float, grayscale_cam, use_rgb=True, image_weight=0.6)
                 gradcam_b64 = pil_to_b64(Image.fromarray(cam_image))
 
-            lung_only_b64 = pil_to_b64(cropped_resized)
+            # ẢNH THỨ 3 (Only Lungs) gửi về Web là ảnh đã CLAHE và Resize
+            lung_only_b64 = pil_to_b64(enhanced_resized)
+            
         except Exception as e:
-            print(f"[WARNING] Failed to create XAI images: {e}")
+            print(f"[WARNING] XAI Generation Error: {e}")
 
+        # Trả về kết quả khớp với Frontend đang chờ
         return {
             "predicted_class": predicted_class,
             "tb_probability": round(tb_prob, 4),
@@ -331,6 +341,7 @@ def run_tb_classification(pil_img: Image.Image, mask_255: np.ndarray) -> dict:
             "lung_only_b64": lung_only_b64,
             "gradcam_b64": gradcam_b64,
         }
+        
     except Exception as e:
         import traceback
         print(f"[ERROR] TB classification failed: {e}")
