@@ -1,17 +1,32 @@
-# IMP302M Project
+# Segmentation-and-Explainable-Classification-System-for-Tuberculosis-Diagnosis
 
-Dự án gồm 3 phần chính:
+![Demo](fig1.png)
 
-- **backend_ai**: API AI cho captioning, segmentation và TB classification.
-- **backend_se**: Backend Node.js cho xác thực và API người dùng.
+## Dataset Information: [Chest X-ray Lungs Segmentation Dataset](https://www.kaggle.com/datasets/iamtapendu/chest-x-ray-lungs-segmentation)
+![Demo](fig7.png)
+
+## Our Proposed Model
+![Demo](fig6.png)
+
+## Experimental Results:
+![Demo](fig5.png)
+![Demo](fig4.png)
+
+## Example Results:
+![Demo](fig3.png)
+
+## Project includes 3 main section:
+
+- **backend_ai**: API AI for segmentation and TB classification.
+- **backend_se**: Backend Node.js for authentication and user API.
 - **frontend**: Frontend React (Vite).
 
-## Yêu cầu hệ thống
+## System Requirement
 
 - Node.js >= 18
 - Python >= 3.9
 
-## Cấu trúc thư mục
+## Folder Structure
 
 ```
 imp302m_project/
@@ -21,56 +36,3 @@ imp302m_project/
   backend_se/
   frontend/
 ```
-
-## Cài đặt
-
-### 1) Backend SE (Node.js)
-
-```bash
-cd backend_se
-npm install
-```
-
-Chạy dev:
-
-```bash
-npm run dev
-```
-
-Chạy production:
-
-```bash
-npm start
-```
-
-### 2) Backend AI (Python)
-
-**Segmentation + TB Classification**:
-
-```bash
-cd backend_ai
-pip install fastapi uvicorn onnxruntime pillow opencv-python numpy torch torchvision timm
-uvicorn api:app --host 0.0.0.0 --port 8000 --reload
-```
-
-### 3) Frontend (Vite)
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-## Biến môi trường
-
-- `backend_se`: tạo file `.env` theo cấu hình DB/JWT/email.
-- `backend_ai`: có thể thiết lập `MODEL_ID` (captioning), `MODEL_PATH` (segmentation) hoặc `TB_MODEL_PATH` (TB classification) nếu cần.
-
-## API endpoints
-
-- **Captioning**: `POST /caption`, `GET /health`
-- **Segmentation + TB Classification**: `POST /predict` (trả về segmentation + classification), `POST /predict/image`, `GET /health`
-
-## Ghi chú
-
-- File model `.pt` / `.onnx` và thư mục `node_modules` đã được ignore trong `.gitignore`.
